@@ -1,0 +1,214 @@
+---
+title: "Case 2 - Experimental Design"
+author: "Khoa Binh Tran"
+date: "7/20/2020"
+output: html_document
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, 
+                      warning=FALSE, 
+                      message=FALSE)
+```
+# Question
+
+# Preparations
+```{r loading_packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(broom)
+```
+# Data
+```{r}
+lendingclub <- read_csv("datasets/case2_lendclub.csv")
+lendingclub_ab <- read_csv("datasets/case2_lendclub_ab.csv")
+```
+#Analysis
+##EDA
+<!-- Examine the variables with glimpse() -->
+```{r}
+glimpse(lendingclub)
+```
+<!-- Find median loan_amnt and mean int_rate, annual_inc with summarize() -->
+```{r}
+lendingclub %>%
+  summarize(median(loan_amnt),
+            mean(int_rate),
+            mean(annual_inc)
+  )
+```
+<!-- Use ggplot2 to build a bar chart of purpose -->
+```{r}
+ggplot(lendingclub, aes(x = purpose)) +
+    geom_bar() +
+    coord_flip()
+```
+<!-- # Use recode() to create the new purpose_recode variable -->
+```{r}
+lendingclub$purpose_recode <- lendingclub$purpose %>% recode(
+        "credit_card" = "debt_related",
+          "debt_consolidation" = "debt_related",
+          "medical" = "debt_related",
+        "car" = "big_purchase",
+          "major_purchase" = "big_purchase",
+          "vacation" = "big_purchase",
+        "moving" = "life_change",
+          "small_business" = "life_change",
+          "wedding" = "life_change",
+        "house" = "home_related",
+          "home_improvement" = "home_related",
+          "purpose" = "purpose_recode")
+```
+##How does loan purpose affect amount funded?
+<!-- Build a linear regression model, purpose_recode_model -->
+```{r}
+purpose_recode_model <- lm(funded_amnt ~ purpose_recode, data = lendingclub)
+```
+<!-- Examine results of purpose_recode_model -->
+```{r}
+summary(purpose_recode_model)
+```
+<!-- Get anova results and save as purpose_recode_anova -->
+```{r}
+purpose_recode_anova <- anova(purpose_recode_model)
+```
+<!-- Print purpose_recode_anova -->
+```{r}
+purpose_recode_anova
+```
+<!-- Examine class of purpose_recode_anova -->
+```{r}
+class(purpose_recode_anova)
+```
+Based on the very small p-value, purpose_recode_anova's results indicate that there is evidence to support the hypothesis that the mean loan amounts are different for at least one combination of purpose_recode's levels.
+
+##Which loan purpose mean is different?
+<!-- Use aov() to build purpose_aov -->
+```{r}
+purpose_aov <- aov(funded_amnt ~ purpose_recode, data = lendingclub)
+```
+<!-- Conduct Tukey's HSD test to create tukey_output -->
+```{r}
+tukey_output <- TukeyHSD(purpose_aov, "purpose_recode", conf.level = 0.95)
+```
+<!-- Tidy tukey_output to make sense of the results -->
+```{r}
+tidy(tukey_output)
+```
+Looking at the p-values for each comparison of the levels of purpose_recode, we can see that only a few of the mean differences are statistically significant, for example the differences in the means for the debt_related and big_purchase loan amounts. In this case, these tiny p-values are most likely to be due to large sample size, and further tests would be required to determine what's actually significant in the case of loans
+
+##Multiple Factor Experiments
+<!-- Use aov() to build purpose_emp_aov -->
+```{r}
+purpose_emp_aov <- aov(funded_amnt ~ purpose_recode + emp_length, data= lendingclub)
+```
+<!-- Print purpose_emp_aov to the console -->
+```{r}
+purpose_emp_aov
+```
+<!-- Call summary() to see the p-values -->
+```{r}
+summary(purpose_emp_aov)
+```
+##Model Validation
+Examine what effect their Lending Club-assigned loan grade variable has on the interest rate, int_rate
+###Pre-modeling EDA
+<!-- Examine the summary of int_rate -->
+```{r}
+summary(lendingclub$int_rate)
+```
+<!-- Examine int_rate by grade -->
+```{r}
+lendingclub %>%
+    group_by(grade) %>%
+    summarize(mean = mean(int_rate), var = var(int_rate), median = median(int_rate))
+```
+<!-- Make a boxplot of int_rate by grade -->
+```{r}
+ggplot(lendingclub, aes(x = grade, y = int_rate)) +
+    geom_boxplot()
+```
+<!-- Use aov() to create grade_aov plus call summary() to print results -->
+```{r}
+grade_aov <- aov(int_rate ~ grade, data = lendingclub)
+summary(grade_aov)
+```
+
+You can see from the numeric summary and the boxplot that grade seems to heavily influence interest rate.
+
+###Post-modeling validation plots + variance
+Examining the Residuals vs. Fitted and Normal Q-Q plots.
+
+<!-- For a 2x2 grid of plots: -->
+```{r}
+par(mfrow=c(2, 2))
+```
+<!-- Plot grade_aov -->
+```{r}
+plot(grade_aov)
+```
+<!-- Bartlett's test for homogeneity of variance -->
+```{r}
+bartlett.test(int_rate ~ grade, data = lendingclub)
+```
+The residuals on this model are okay, though the residuals on G have a much smaller range than any other level of grade (the dots are far less spread out.) The Q-Q plot, however, shows that the residuals are fairly normal. However, given the highly significant p-value from Bartlett's test, the assumption of homogeneity of variances is violated, which is one of the assumptions of an ANOVA model.
+
+###Kruskal-Wallis rank sum test
+The homogeneity of variance assumption of linear modeling was violated, we may want to try an alternative.
+One non-parametric alternative to ANOVA is the Kruskal-Wallis rank sum test. The null hypothesis for this test would be that all of the int_rates have the same ranking by grade.
+
+<!-- Conduct the Kruskal-Wallis rank sum test -->
+```{r}
+kruskal.test(int_rate ~ grade,
+             data = lendingclub)
+```
+low p-value -> int_rate varies by grade
+
+##A/B Testing
+Does the color scheme of the header affect people's decision to apply for loans?
+
+[A/B Test. Source: DataCamp](datasets/case2_ABtest.png)
+
+###Sample size for A/B Test
+Analyze A/B test results with t-test after collecting data. Calculate the sample size required.
+
+Given the effect size d = 0.2, power 0.8, significance level 0.05 
+
+<!-- Load the pwr package -->
+```{r}
+library(pwr)
+```
+<!-- Find the sample size -->
+```{r}
+pwr.t.test(n = NULL,                    
+           d = 0.2,
+           sig.level = 0.05,
+           power = 0.8,
+           alternative = "two.sided")
+```
+So, the sample size needed for the experiment is about 393 observations.
+
+###A/B Test
+When applicants were using the Lending Club website, they were randomly assigned to two groups, A or B, where A was shown a mint green website header and B was shown a light blue website header. Lending Club was interested to see if website header color choice influenced loan_amnt, the amount an applicant asked to borrow.
+The A/B test was run until there were 500 applicants in each group. Each applicant has been labeled as group A or B. Data was collected in the lendingclub_ab dataset.
+
+<!-- Plot the A/B test results -->
+```{r}
+ggplot(lendingclub_ab, aes(x = Group, y = loan_amnt)) +
+    geom_boxplot()
+```
+<!-- Conduct a two-sided t-test -->
+```{r}
+t.test(loan_amnt ~ Group, data = lendingclub_ab)
+```
+It seems that there is no compelling evidence to support the hypothesis that there is a difference the two A/B test groups' mean loan_amnt.
+
+Examine the effects of three explanatory variables on loan_amnt
+<!-- Build lendingclub_multi -->
+```{r}
+lendingclub_multi <-lm(loan_amnt ~ Group + grade + verification_status, data = lendingclub_ab)
+```
+<!-- Examine lendingclub_multi results -->
+```{r}
+tidy(lendingclub_multi)
+```
