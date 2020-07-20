@@ -1,0 +1,104 @@
+---
+title: "Case Study 1 - Multiple Regression"
+author: "Khoa Binh Tran"
+date: "7/20/2020"
+output: html_document
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, 
+                      warning=FALSE, 
+                      message=FALSE)
+```
+## Question
+What are the factors that contribute to a price of the meal in a restaurant in NYC?
+
+## Preparations
+```{r loading_packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(scatterplot3d)
+```
+## Data
+```{r}
+nyc <- read_csv("datasets/case1_nyc.csv")
+```
+## Analysis
+### Exploratory Data Analysis
+<!-- Exploring the data -->
+```{r}
+glimpse(nyc)
+```
+Examine the pairwise scatterplots
+```{r}
+nyc %>%
+  select(-c("Case", "Restaurant")) %>%
+  pairs()
+```
+###SLR Model
+<!-- Price by Food plot -->
+```{r}
+ggplot(data = nyc, aes(x = Food, y = Price)) +
+  geom_point()
+```
+<!-- Price by Food model -->
+```{r}
+mod1 <- lm(Price ~ Food, data = nyc)
+summary(mod1)
+```
+Model 1 shows that for an additional unit in food quality, the price increases by approx. 2.94 dollars.
+###The effect of location
+Now we integrate a location variable (East) into the model. It is a categorical variable that specifies that whether the restaurant is located in the East(1) or not (0).
+<!-- Summary statistics -->
+```{r}
+nyc %>%
+  group_by(East) %>%
+  summarize(mean(Price))
+```
+<!-- Parallel slopes model -->
+```{r}
+mod2 <- lm(Price ~ Food + East, data = nyc)
+summary(mod2)
+```
+Each additional rating point of food quality is associated with a $2.88 increase in the expected price of meal, after controlling for location.
+The premium for an Italian restaurant in NYC associated with being on the east side of 5th Avenue is $1.46, after controlling for the quality of the food.
+###How about service?
+Are people willing to pay more for better restaurant service?
+<!-- Fit model -->
+```{r}
+mod3 <- lm(Price ~ Food + Service, data = nyc)
+summary(mod3)
+```
+<!-- Draw 3D scatterplot -->
+```{r}
+p <- scatterplot3d(nyc$Price ~ nyc$Food + nyc$Service)
+p$plane3d(mod3)
+```
+##Build a full model
+Now we incorporate all three available variables in a model to explain for the variations of Price. (with exceptions to Case and Restaurant because they are id and name variables)
+<!-- Price by Food and Service and Location -->
+```{r}
+mod4 <- lm(Price ~ Food + Service + East, data = nyc)
+summary(mod4)
+```
+The premium for being on the East side of 5th Avenue is just less than a dollar, after controlling for the quality of food and service.
+
+The impact of location is relatively small, since one additional rating point of either food or service would result in a higher expected price than moving a restaurant from the West side to the East side.
+
+ <!-- draw 3D scatterplot -->
+```{r}
+library(plotly)
+plot_ly(data = nyc, z = ~Price, x = ~Food, y = ~Service, opacity = 0.6) %>%
+  add_markers(color = ~factor(East))
+```
+There is another variable that we havent considered yet: decor. Let's try fitting that into our model.
+```{r}
+mod5 <- lm(Price ~ Food + Service + Decor + East, data = nyc)
+summary(mod5)
+```
+The effect of service turns negative, albeit statistically insignificant.
+
+The dramatic change in the effect of service may be explained by the following reasons:
+
+Since the quality of food, decor, and service were all strongly correlated, multicollinearity is the likely explanation.
+Once we control for the quality of food, decor, and location, the additional information conveyed by service is negligible.
