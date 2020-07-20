@@ -1,0 +1,110 @@
+---
+title: "Case 2.2 - Block Designs 1"
+author: "Khoa Binh Tran"
+date: "7/20/2020"
+output: html_document
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, 
+                      warning=FALSE, 
+                      message=FALSE)
+```
+# Problem
+Practice on Randomized Complete (& Balanced Incomplete) Block Designs. Dataset: NHANES
+
+# Preparations
+```{r loading_packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(broom)
+library(haven)
+```
+# Data
+```{r}
+# Import the three datasets using read_csv()
+nhanes_demo <- read_csv("datasets/case2_nhanes_demo.csv")
+nhanes_bodymeasures <- read_csv("datasets/case2_nhanes_bodymeasures.csv")
+nhanes_medical <- read_csv("datasets/case2_nhanes_medicalconditions.csv")
+# Merge the 3 datasets to create nhanes_combined
+nhanes_combined <- list(nhanes_demo, nhanes_medical, nhanes_bodymeasures) %>%
+  Reduce(function(df1, df2) inner_join(df1, df2, by = "seqn"), .)
+```
+#Analysis
+##EDA
+Inspect the effect of being told by a physician to reduce calories/fat in their diet on weight.
+```{r}
+nhanes_combined %>%
+  group_by(mcq365d) %>%
+  summarize(mean = mean(bmxwt, na.rm = TRUE))
+```
+```{r}
+nhanes_combined %>%
+  ggplot(aes(as.factor(mcq365d), bmxwt)) +
+  geom_boxplot() +
+  labs(x = "Treatment",
+       y = "Weight")
+```
+##Data Cleaning
+```{r}
+# Filter to keep only those 16+
+nhanes_filter <- nhanes_combined %>% filter(ridageyr > 16)
+```
+```{r}
+# Load simputation & impute bmxwt by riagendr
+library(simputation)
+nhanes_final <- impute_median(nhanes_filter, bmxwt ~ riagendr)
+```
+```{r}
+# Recode mcq365d with recode() & examine with count()
+nhanes_final$mcq365d <- recode(nhanes_final$mcq365d,
+                               `1` = 1,
+                               `2` = 2,
+                               `9` = 2)
+nhanes_final %>% count(mcq365d)
+```
+##Resampling
+```{r}
+# Use sample_n() to create nhanes_srs
+nhanes_srs <- nhanes_final %>% sample_n(2500)
+```
+```{r}
+# Create nhanes_stratified with group_by() and sample_n()
+nhanes_stratified <- nhanes_final %>%
+  group_by(riagendr) %>%
+    sample_n(2000)
+
+nhanes_stratified %>%
+  count(riagendr)
+```
+```{r}
+# Load sampling package and create nhanes_cluster with cluster()
+library(sampling)
+nhanes_cluster <- cluster(nhanes_final, c("indhhin2"), 6, method = "srswor")
+```
+##Randomized Complete Block Designs
+```{r}
+nhanes_rcbd <- aov(bmxwt ~ mcq365d + riagendr, data = nhanes_final)
+summary(nhanes_rcbd)
+```
+```{r}
+# Print mean weights by mcq365d and riagendr
+nhanes_final %>%
+    group_by(mcq365d, riagendr) %>%
+    summarize(mean_wt = mean(bmxwt, na.rm = TRUE))
+```
+
+###RCBD Model Validation
+```{r}
+# Set up the 2x2 plotting grid and plot nhanes_rcbd
+par(mfrow = c(2,2))
+plot(nhanes_rcbd)
+```
+```{r}
+#  View the interaction plot between the treatment and gender and observe if the lines are parallel.
+with(nhanes_final, interaction.plot(mcq365d, riagendr, bmxwt))
+```
+```{r}
+# View the interaction plot between gender and the treatment
+with(nhanes_final, interaction.plot(riagendr, mcq365d, bmxwt))
+```
