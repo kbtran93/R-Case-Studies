@@ -1,0 +1,52 @@
+---
+title: "Case 2.3 - Experimental Designs 3"
+author: "Khoa Binh Tran"
+date: "7/21/2020"
+output: html_document
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, 
+                      warning=FALSE, 
+                      message=FALSE)
+```
+# Problem
+
+
+# Preparations
+```{r loading_packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(broom)
+```
+# Data
+NYC dataset from Kaggle. It contains data from all accredited of SAT scores during the 2014 - 2015 school year.
+```{r}
+nyc_scores <- read_csv("datasets/case2_nyc_scores.csv")
+```
+#Analysis
+##EDA
+```{r}
+# Mean, var, and median of Math score by Borough
+nyc_scores %>%
+    group_by(Borough) %>%
+    summarize(mean = mean(Average_Score_SAT_Math, na.rm = TRUE),
+        var = var(Average_Score_SAT_Math, na.rm = TRUE),
+        median = median(Average_Score_SAT_Math, na.rm = TRUE))
+```
+```{r}
+# Mean, var, and median of Math score by Teacher Education Level
+nyc_scores %>%
+    group_by(Teacher_Education_Level) %>%
+    summarize(mean = mean(Average_Score_SAT_Math, na.rm = TRUE),
+        var = var(Average_Score_SAT_Math, na.rm = TRUE),
+        median = median(Average_Score_SAT_Math, na.rm = TRUE))
+```
+```{r}
+# Mean, var, and median of Math score by both
+nyc_scores %>%
+    group_by(Borough, Teacher_Education_Level) %>%
+    summarize(mean = mean(Average_Score_SAT_Math, na.rm = TRUE),
+        var = var(Average_Score_SAT_Math, na.rm = TRUE),
+        median = median(Average_Score_SAT_Math, na.rm = TRUE))
+```
